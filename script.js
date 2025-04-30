@@ -76,6 +76,9 @@ document.addEventListener('DOMContentLoaded', function() {
     liftCapacityInput.addEventListener('change', updateLiftCapacity);
     liftWeightInput.addEventListener('change', updateLiftWeight);
     outriggerLengthInput.addEventListener('change', updateOutriggerLength);
+    document.getElementById('saveProjectBtn').addEventListener('click', saveProject);
+    document.getElementById('loadProjectBtn').addEventListener('click', triggerFileInput);
+    document.getElementById('projectFileInput').addEventListener('change', loadProject);
     
     // Drag-and-Drop für die Traverse
     trussBeam.addEventListener('dragover', handleDragOver);
@@ -1377,6 +1380,117 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Funktion zum Zeichnen der Traverse im PDF
+    // Projekt-Verwaltungsfunktionen
+    function saveProject() {
+        // Erstelle ein Projekt-Objekt mit allen relevanten Daten
+        const project = {
+            version: '1.0',
+            trussLength: trussLength,
+            riggingPoints: riggingPoints,
+            loads: loads,
+            useLiftSystem: useLiftSystem,
+            liftHeight: liftHeight,
+            liftCount: liftCount,
+            liftCapacity: liftCapacity,
+            liftWeight: liftWeight,
+            outriggerLength: outriggerLength,
+            liftPositions: liftPositions
+        };
+        
+        // Konvertiere das Objekt in einen JSON-String
+        const projectJson = JSON.stringify(project, null, 2);
+        
+        // Erstelle einen Blob und einen Download-Link
+        const blob = new Blob([projectJson], { type: 'application/trusstool' });
+        const url = URL.createObjectURL(blob);
+        
+        // Erstelle einen temporären Link zum Herunterladen
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'fd32_truss_projekt.trusstool';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Bereinige
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 0);
+        
+        // Bestätigungsmeldung
+        alert('Projekt wurde erfolgreich gespeichert!');
+    }
+    
+    function triggerFileInput() {
+        document.getElementById('projectFileInput').click();
+    }
+    
+    function loadProject(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                // Parse den JSON-String
+                const project = JSON.parse(event.target.result);
+                
+                // Prüfe die Version
+                if (!project.version) {
+                    throw new Error('Ungültiges Projektformat');
+                }
+                
+                // Lade die Projektdaten
+                trussLength = project.trussLength || 10;
+                trussLengthInput.value = trussLength;
+                
+                riggingPoints = project.riggingPoints || [
+                    { position: 0 },
+                    { position: trussLength }
+                ];
+                
+                loads = project.loads || [];
+                
+                useLiftSystem = project.useLiftSystem || false;
+                useLiftSystemCheckbox.checked = useLiftSystem;
+                
+                liftHeight = project.liftHeight || 5;
+                liftHeightInput.value = liftHeight;
+                
+                liftCount = project.liftCount || 2;
+                liftCountInput.value = liftCount;
+                
+                liftCapacity = project.liftCapacity || 250;
+                liftCapacityInput.value = liftCapacity;
+                
+                liftWeight = project.liftWeight || 75;
+                liftWeightInput.value = liftWeight;
+                
+                outriggerLength = project.outriggerLength || 1.5;
+                outriggerLengthInput.value = outriggerLength;
+                
+                liftPositions = project.liftPositions || [];
+                
+                // Aktualisiere die UI
+                toggleLiftSystem();
+                initializeRiggingPointsUI();
+                updateLoadsList();
+                updateVisualization();
+                
+                // Bestätigungsmeldung
+                alert('Projekt wurde erfolgreich geladen!');
+            } catch (error) {
+                alert('Fehler beim Laden des Projekts: ' + error.message);
+                console.error('Fehler beim Laden des Projekts:', error);
+            }
+        };
+        
+        reader.readAsText(file);
+        
+        // Zurücksetzen des Datei-Inputs, damit das gleiche Projekt erneut geladen werden kann
+        e.target.value = '';
+    }
+    
     function drawTrussDiagram(doc, startY, margin, pageWidth) {
         const diagramWidth = pageWidth - 2 * margin;
         const diagramHeight = useLiftSystem ? 90 : 60;

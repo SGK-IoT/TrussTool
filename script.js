@@ -123,10 +123,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Aktualisiere auch die Positionsmarkierung
-                const posMarkers = document.querySelectorAll('.position-marker:not(.load-marker)');
+                const posMarkers = document.querySelectorAll('.position-marker:not(.load-marker):not(.lift-marker)');
                 if (posMarkers[draggedItemIndex]) {
                     posMarkers[draggedItemIndex].style.left = `${(finalPosition / trussLength) * 100}%`;
                     posMarkers[draggedItemIndex].textContent = `${finalPosition.toFixed(1)} m`;
+                }
+            } else if (draggedItemType === 'lift') {
+                // Aktualisiere die Position des Lifts
+                updateLiftPosition(draggedItemIndex, clampedPosition);
+                
+                // Aktualisiere die visuelle Position sofort
+                const liftElements = document.querySelectorAll('.lift');
+                if (liftElements[draggedItemIndex]) {
+                    liftElements[draggedItemIndex].style.left = `${(clampedPosition / trussLength) * 100}%`;
+                }
+                
+                // Aktualisiere auch die Positionsmarkierung
+                const liftMarkers = document.querySelectorAll('.position-marker.lift-marker');
+                if (liftMarkers[draggedItemIndex]) {
+                    liftMarkers[draggedItemIndex].style.left = `${(clampedPosition / trussLength) * 100}%`;
+                    liftMarkers[draggedItemIndex].textContent = `${clampedPosition.toFixed(1)} m`;
                 }
             }
         }
@@ -187,10 +203,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Aktualisiere auch die Positionsmarkierung
-                const posMarkers = document.querySelectorAll('.position-marker:not(.load-marker)');
+                const posMarkers = document.querySelectorAll('.position-marker:not(.load-marker):not(.lift-marker)');
                 if (posMarkers[draggedItemIndex]) {
                     posMarkers[draggedItemIndex].style.left = `${(clampedPosition / trussLength) * 100}%`;
                     posMarkers[draggedItemIndex].textContent = `${clampedPosition.toFixed(1)} m`;
+                }
+            } else if (draggedItemType === 'lift') {
+                // Aktualisiere die Position des Lifts
+                updateLiftPosition(draggedItemIndex, clampedPosition);
+                
+                // Aktualisiere die visuelle Position sofort
+                const liftElements = document.querySelectorAll('.lift');
+                if (liftElements[draggedItemIndex]) {
+                    liftElements[draggedItemIndex].style.left = `${(clampedPosition / trussLength) * 100}%`;
+                }
+                
+                // Aktualisiere auch die Positionsmarkierung
+                const liftMarkers = document.querySelectorAll('.position-marker.lift-marker');
+                if (liftMarkers[draggedItemIndex]) {
+                    liftMarkers[draggedItemIndex].style.left = `${(clampedPosition / trussLength) * 100}%`;
+                    liftMarkers[draggedItemIndex].textContent = `${clampedPosition.toFixed(1)} m`;
                 }
             }
         }
@@ -240,6 +272,8 @@ document.addEventListener('DOMContentLoaded', function() {
             liftCount = 4;
             liftCountInput.value = 4;
         }
+        // Zurücksetzen der Lift-Positionen bei Änderung der Anzahl
+        liftPositions = [];
         updateVisualization();
     }
     
@@ -635,17 +669,29 @@ document.addEventListener('DOMContentLoaded', function() {
             ];
             
             // Eigengewicht der Traverse
-            const trussWeightPerPoint = trussWeight / 2;
-            forces[0].force += trussWeightPerPoint;
-            forces[1].force += trussWeightPerPoint;
+            // Berechne das Eigengewicht basierend auf der Position der Aufhängepunkte
+            const span = riggingPoints[1].position - riggingPoints[0].position;
+            const trussWeightTotal = span * TRUSS_WEIGHT_KG_PER_METER;
+            
+            // Eigengewicht wird gleichmäßig verteilt
+            forces[0].force += trussWeightTotal / 2;
+            forces[1].force += trussWeightTotal / 2;
             
             // Kräfte durch Lasten
             loads.forEach(load => {
-                const distanceToEnd = trussLength - load.position;
-                const ratio = distanceToEnd / trussLength;
+                // Prüfe, ob die Last innerhalb der Aufhängepunkte liegt
+                if (load.position < riggingPoints[0].position || load.position > riggingPoints[1].position) {
+                    return; // Last liegt außerhalb der Traverse
+                }
                 
-                forces[0].force += load.weight * ratio;
-                forces[1].force += load.weight * (1 - ratio);
+                // Berechne die Hebelarme
+                const distanceToLeft = load.position - riggingPoints[0].position;
+                const distanceToRight = riggingPoints[1].position - load.position;
+                const totalDistance = span;
+                
+                // Berechne die Kräfte basierend auf den Hebelarmen
+                forces[0].force += load.weight * (distanceToRight / totalDistance);
+                forces[1].force += load.weight * (distanceToLeft / totalDistance);
             });
             
             return forces;
@@ -657,30 +703,43 @@ document.addEventListener('DOMContentLoaded', function() {
             return { position: point.position, force: 0 };
         });
         
-        // Eigengewicht der Traverse - gleichmäßig auf alle Aufhängepunkte verteilen
-        const trussWeightPerPoint = trussWeight / riggingPoints.length;
-        forces.forEach(force => {
-            force.force += trussWeightPerPoint;
-        });
+        // Eigengewicht der Traverse - auf Abschnitte zwischen Aufhängepunkten verteilen
+        for (let i = 0; i < riggingPoints.length - 1; i++) {
+            const span = riggingPoints[i+1].position - riggingPoints[i].position;
+            const sectionWeight = span * TRUSS_WEIGHT_KG_PER_METER;
+            
+            // Verteile das Gewicht dieses Abschnitts auf die beiden angrenzenden Aufhängepunkte
+            forces[i].force += sectionWeight / 2;
+            forces[i+1].force += sectionWeight / 2;
+        }
         
         // Kräfte durch Lasten
         loads.forEach(load => {
             // Finde die beiden nächstgelegenen Aufhängepunkte
-            let leftIndex = 0;
-            let rightIndex = 0;
+            let leftIndex = -1;
+            let rightIndex = -1;
             
-            for (let i = 0; i < riggingPoints.length; i++) {
-                if (riggingPoints[i].position <= load.position) {
+            for (let i = 0; i < riggingPoints.length - 1; i++) {
+                if (load.position >= riggingPoints[i].position && load.position <= riggingPoints[i+1].position) {
                     leftIndex = i;
-                } else {
-                    rightIndex = i;
+                    rightIndex = i + 1;
                     break;
                 }
+            }
+            
+            // Wenn die Last außerhalb der Aufhängepunkte liegt, ignorieren
+            if (leftIndex === -1 || rightIndex === -1) {
+                return;
             }
             
             // Wenn die Last genau auf einem Aufhängepunkt liegt
             if (riggingPoints[leftIndex].position === load.position) {
                 forces[leftIndex].force += load.weight;
+                return;
+            }
+            
+            if (riggingPoints[rightIndex].position === load.position) {
+                forces[rightIndex].force += load.weight;
                 return;
             }
             
@@ -845,21 +904,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const draggingElements = document.querySelectorAll('.dragging');
         draggingElements.forEach(el => el.classList.remove('dragging'));
     }
+    // Zustandsvariable für Lift-Positionen
+    let liftPositions = [];
+    
     // Funktion zum Zeichnen des Liftsystems
     function drawLiftSystem() {
-        // Berechne die Positionen der Lifte basierend auf der Anzahl
-        const liftPositions = [];
-        
-        if (liftCount === 2) {
-            // Bei 2 Liften: an den Enden
-            liftPositions.push(0, trussLength);
-        } else if (liftCount === 3) {
-            // Bei 3 Liften: an beiden Enden und in der Mitte
-            liftPositions.push(0, trussLength / 2, trussLength);
-        } else if (liftCount === 4) {
-            // Bei 4 Liften: an beiden Enden und gleichmäßig verteilt
-            const segment = trussLength / 3;
-            liftPositions.push(0, segment, 2 * segment, trussLength);
+        // Initialisiere die Lift-Positionen, wenn sie noch nicht gesetzt wurden
+        if (liftPositions.length !== liftCount) {
+            initializeLiftPositions();
         }
         
         // Zeichne die Lifte
@@ -868,6 +920,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const liftElement = document.createElement('div');
             liftElement.className = 'lift';
             liftElement.style.left = `${(position / trussLength) * 100}%`;
+            liftElement.dataset.index = index;
             
             // Lift-Säule
             const liftColumn = document.createElement('div');
@@ -907,14 +960,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 liftElement.appendChild(outrigger);
             }
             
+            // Direktes Verschieben mit der Maus
+            liftElement.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                draggedItemType = 'lift';
+                draggedItemIndex = index;
+                isDragging = true;
+                dragStartX = e.clientX;
+                this.classList.add('dragging');
+                
+                // Verhindere Standard-Drag-and-Drop
+                liftElement.ondragstart = function() { return false; };
+            });
+            
+            // Touch-Events für mobile Geräte
+            liftElement.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                draggedItemType = 'lift';
+                draggedItemIndex = index;
+                isDragging = true;
+                dragStartX = e.touches[0].clientX;
+                this.classList.add('dragging');
+            }, { passive: false });
+            
             loadsContainer.appendChild(liftElement);
+            
+            // Positionsmarkierung
+            const posMarker = document.createElement('div');
+            posMarker.className = 'position-marker lift-marker';
+            posMarker.textContent = `${position.toFixed(1)} m`;
+            posMarker.style.left = `${(position / trussLength) * 100}%`;
+            loadsContainer.appendChild(posMarker);
         });
     }
     
-    // Funktion zur Berechnung der Kräfte mit Liftsystem
-    function calculateLiftSystemForces(riggingPoints, loads, trussWeight, trussLength) {
-        // Berechne die Positionen der Lifte basierend auf der Anzahl
-        const liftPositions = [];
+    // Funktion zum Initialisieren der Lift-Positionen
+    function initializeLiftPositions() {
+        liftPositions = [];
         
         if (liftCount === 2) {
             // Bei 2 Liften: an den Enden
@@ -927,31 +1009,71 @@ document.addEventListener('DOMContentLoaded', function() {
             const segment = trussLength / 3;
             liftPositions.push(0, segment, 2 * segment, trussLength);
         }
+    }
+    
+    // Funktion zum Aktualisieren der Lift-Position
+    function updateLiftPosition(index, position) {
+        if (position < 0) position = 0;
+        if (position > trussLength) position = trussLength;
+        
+        liftPositions[index] = position;
+        updateVisualization();
+    }
+    
+    // Funktion zur Berechnung der Kräfte mit Liftsystem
+    function calculateLiftSystemForces(riggingPoints, loads, trussWeight, trussLength) {
+        // Verwende die gespeicherten Lift-Positionen
+        if (liftPositions.length !== liftCount) {
+            initializeLiftPositions();
+        }
+        
+        // Sortiere die Lift-Positionen
+        liftPositions.sort((a, b) => a - b);
         
         // Erstelle Lift-Objekte mit Positionen
         const lifts = liftPositions.map((position, index) => {
             return { position, force: 0, type: 'lift' };
         });
         
-        // Eigengewicht der Traverse gleichmäßig auf alle Lifte verteilen
-        const trussWeightPerLift = trussWeight / liftCount;
-        lifts.forEach(lift => {
-            lift.force += trussWeightPerLift;
-        });
+        // Eigengewicht der Traverse auf Abschnitte zwischen Liften verteilen
+        for (let i = 0; i < lifts.length - 1; i++) {
+            const span = lifts[i+1].position - lifts[i].position;
+            const sectionWeight = span * TRUSS_WEIGHT_KG_PER_METER;
+            
+            // Verteile das Gewicht dieses Abschnitts auf die beiden angrenzenden Lifte
+            lifts[i].force += sectionWeight / 2;
+            lifts[i+1].force += sectionWeight / 2;
+        }
         
         // Kräfte durch Lasten
         loads.forEach(load => {
             // Finde die beiden nächstgelegenen Lifte
-            let leftIndex = 0;
-            let rightIndex = 0;
+            let leftIndex = -1;
+            let rightIndex = -1;
             
-            for (let i = 0; i < lifts.length; i++) {
-                if (lifts[i].position <= load.position) {
+            for (let i = 0; i < lifts.length - 1; i++) {
+                if (load.position >= lifts[i].position && load.position <= lifts[i+1].position) {
                     leftIndex = i;
-                } else {
-                    rightIndex = i;
+                    rightIndex = i + 1;
                     break;
                 }
+            }
+            
+            // Wenn die Last außerhalb der Lifte liegt
+            if (leftIndex === -1 || rightIndex === -1) {
+                // Prüfe, ob die Last links vom ersten Lift liegt
+                if (load.position < lifts[0].position) {
+                    lifts[0].force += load.weight;
+                    return;
+                }
+                
+                // Prüfe, ob die Last rechts vom letzten Lift liegt
+                if (load.position > lifts[lifts.length - 1].position) {
+                    lifts[lifts.length - 1].force += load.weight;
+                    return;
+                }
+                
+                return; // Last liegt außerhalb des Bereichs
             }
             
             // Wenn die Last genau auf einem Lift liegt
@@ -960,9 +1082,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Wenn die Last am rechten Ende liegt
-            if (rightIndex >= lifts.length) {
-                lifts[leftIndex].force += load.weight;
+            if (lifts[rightIndex].position === load.position) {
+                lifts[rightIndex].force += load.weight;
                 return;
             }
             

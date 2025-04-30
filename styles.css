@@ -144,6 +144,12 @@ header h1 {
     color: var(--accent-color);
 }
 
+.position-marker.lift-marker {
+    bottom: -80px;
+    top: auto;
+    color: var(--secondary-color);
+}
+
 .load.dragging {
     opacity: 0.7;
     cursor: grabbing;
@@ -290,6 +296,17 @@ header h1 {
 
 .lift-options.active {
     display: block;
+}
+
+.lift-instruction {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #7f8c8d;
+}
+
+.lift-instruction i {
+    color: var(--primary-color);
+    margin-right: 5px;
 }
 
 .toggle-switch {
@@ -510,6 +527,22 @@ input[type="number"], input[type="text"] {
     flex-direction: column;
     align-items: center;
     z-index: 5;
+    cursor: grab;
+}
+
+.lift:hover {
+    opacity: 0.9;
+}
+
+.lift:active {
+    cursor: grabbing;
+}
+
+.lift.dragging {
+    opacity: 0.7;
+    cursor: grabbing;
+    z-index: 100;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
 .lift-column {

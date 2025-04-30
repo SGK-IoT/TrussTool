@@ -1,6 +1,29 @@
 document.addEventListener('DOMContentLoaded', function() {
     // jsPDF initialisieren
     const { jsPDF } = window.jspdf;
+    
+    // Theme Switcher
+    const themeSwitch = document.getElementById('themeSwitch');
+    
+    // Prüfe, ob ein gespeichertes Theme existiert
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'dark') {
+            themeSwitch.checked = true;
+        }
+    }
+    
+    // Event-Listener für Theme-Wechsel
+    themeSwitch.addEventListener('change', function() {
+        if (this.checked) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+            localStorage.setItem('theme', 'light');
+        }
+    });
     // Konstanten und Konfiguration
     const MAX_LOADS = 10;
     const MAX_RIGGING_POINTS = 4;
@@ -275,6 +298,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Zurücksetzen der Lift-Positionen bei Änderung der Anzahl
         liftPositions = [];
         updateVisualization();
+        // Aktualisiere die Textfelder für die Lift-Positionen
+        updateLiftPositionInputs();
     }
     
     function updateLiftCapacity() {
@@ -914,6 +939,9 @@ document.addEventListener('DOMContentLoaded', function() {
             initializeLiftPositions();
         }
         
+        // Aktualisiere die Textfelder für die Lift-Positionen
+        updateLiftPositionInputs();
+        
         // Zeichne die Lifte
         liftPositions.forEach((position, index) => {
             // Lift-Element
@@ -1018,6 +1046,54 @@ document.addEventListener('DOMContentLoaded', function() {
         
         liftPositions[index] = position;
         updateVisualization();
+        
+        // Aktualisiere auch die Textfelder
+        const liftPositionInputs = document.querySelectorAll('.lift-position-input input');
+        if (liftPositionInputs[index]) {
+            liftPositionInputs[index].value = position.toFixed(1);
+        }
+    }
+    
+    // Funktion zum Aktualisieren der Textfelder für die Lift-Positionen
+    function updateLiftPositionInputs() {
+        const liftPositionsContainer = document.getElementById('liftPositionsContainer');
+        
+        // Entferne vorhandene Inputs
+        const existingInputs = liftPositionsContainer.querySelector('.lift-position-inputs');
+        if (existingInputs) {
+            existingInputs.remove();
+        }
+        
+        // Erstelle Container für die Inputs
+        const inputsContainer = document.createElement('div');
+        inputsContainer.className = 'lift-position-inputs';
+        
+        // Erstelle für jeden Lift ein Textfeld
+        liftPositions.forEach((position, index) => {
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'lift-position-input';
+            
+            const label = document.createElement('label');
+            label.textContent = `L${index + 1}:`;
+            
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.max = trussLength;
+            input.step = '0.1';
+            input.value = position.toFixed(1);
+            
+            // Event-Listener für Änderungen
+            input.addEventListener('change', function() {
+                updateLiftPosition(index, parseFloat(this.value));
+            });
+            
+            inputGroup.appendChild(label);
+            inputGroup.appendChild(input);
+            inputsContainer.appendChild(inputGroup);
+        });
+        
+        liftPositionsContainer.appendChild(inputsContainer);
     }
     
     // Funktion zur Berechnung der Kräfte mit Liftsystem
